@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Seller Ledger</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{--bg:#f1f4f6;--card:#fff;--ink:#14202b;--mut:#5b6a77;--line:#d6dee4;--acc:#0b6e6e;--warn:#99590a;--bad:#b42318;--ok:#17703f;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e161c;--card:#16212a;--ink:#e5edf2;--mut:#91a2af;--line:#26343f;--acc:#4cc2bd;--warn:#e3a54d;--bad:#ff8c7c;--ok:#5fd394}}
+:root[data-theme="dark"]{--bg:#0e161c;--card:#16212a;--ink:#e5edf2;--mut:#91a2af;--line:#26343f;--acc:#4cc2bd;--warn:#e3a54d;--bad:#ff8c7c;--ok:#5fd394}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 'IBM Plex Sans',system-ui,sans-serif;font-variant-numeric:tabular-nums}
+nav{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;border:0;background:none;color:var(--mut);font:inherit;font-size:12px;padding:11px 0}
+nav button.on{color:var(--acc);font-weight:600;box-shadow:inset 0 2px var(--acc)}
+main{max-width:860px;margin:0 auto;padding:12px 14px 88px}
+h1{font-size:19px;margin:6px 0 10px}h2{font-size:15px;margin:18px 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:10px}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:10px}.g .card{margin:0}
+.k{font-size:12px;color:var(--mut)}.v{font-size:22px;font-weight:600}
+.na{color:var(--warn);font-weight:500;font-size:14px}.bad{color:var(--bad)}
+.bar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+button,input,select{font:inherit;color:inherit}
+.bar button,.btn{border:1px solid var(--line);background:var(--card);border-radius:6px;padding:7px 11px}
+.bar button.on,.btn.p{background:var(--acc);border-color:var(--acc);color:var(--card)}
+.btn:disabled{opacity:.5}
+input,select{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:8px;min-width:0}
+form input,form select{width:100%}
+label{display:block;font-size:12px;color:var(--mut);margin:8px 0 2px}
+.row{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid var(--line)}.row:first-child{border-top:0}
+.sc{overflow-x:auto}table{border-collapse:collapse;width:100%}td,th{padding:7px 6px;border-top:1px solid var(--line);text-align:left;white-space:nowrap}th{border-top:0;font-size:12px;color:var(--mut);font-weight:500}
+.note{color:var(--mut);font-size:13px}
+.b{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;border:1px solid var(--line)}
+.ex{display:flex;justify-content:space-between;gap:8px}
+@media(min-width:900px){nav{top:0;right:auto;width:170px;flex-direction:column;border-top:0;border-right:1px solid var(--line);padding-top:14px}nav button{text-align:left;padding:12px 18px;font-size:14px}nav button.on{box-shadow:inset 3px 0 var(--acc)}main{margin-left:190px;padding-bottom:24px}}
+</style>
+</head>
+<body>
+<main id="m"></main>
+<nav id="n"></nav>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const rs=p=>'₹'+(p/100).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const NA='<span class="na">Not available</span>';
+const m$=p=>p==null?NA:rs(p);
+const toP=v=>{const n=parseFloat(String(v).replace(/[₹,\s]/g,''));return isFinite(n)?Math.round(n*100):null};
+const uid8=()=>Math.random().toString(36).slice(2,10);
+function pd(s){s=String(s||'').trim();let y,mo,d,m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+ if(m){y=m[1];mo=m[2];d=m[3]}else if(m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/)){d=m[1];mo=m[2];y=m[3]}else return null;
+ const t=new Date(+y,+mo-1,+d);return t.getFullYear()==+y&&t.getMonth()==+mo-1&&t.getDate()==+d?iso(t):null}
+const S={tab:'home',p:'30',from:'',to:'',q:'',st:'',products:[],moves:[],expenses:[],imports:[],audit:[],orders:{}};
+let DB=null,BASE='',pend=null,msg='',dirty=new Set(),tm=null,local=true;
+const bk=o=>'o'+o.orderDate.slice(0,7)+(+o.orderDate.slice(8,10)<=15?'a':'b');
+const inR=d=>d>=S.from&&d<=S.to;
+const sold=o=>o.status!='CANCELLED'&&o.status!='RETURNED';
+const costOf=sku=>{const p=S.products.find(p=>p.sku==sku);return p&&p.cost!=null?p.cost:null};
+function log(a,d){S.audit.unshift({t:new Date().toISOString(),a,d});S.audit.length=Math.min(S.audit.length,200);dirty.add('meta')}
+function save(ids){(ids||[]).forEach(i=>dirty.add(i));dirty.add('meta');try{localStorage.setItem('sl1',JSON.stringify(S))}catch(e){}clearTimeout(tm);tm=setTimeout(flush,500)}
+async function flush(){if(!DB)return;const ids=[...dirty];dirty.clear();
+ try{for(const id of ids){const d=DB.doc(BASE+'/'+id);
+  if(id=='meta'){const{products,moves,expenses,imports,audit}=S;await d.set({products,moves,expenses,imports,audit})}
+  else await d.set({rows:Object.fromEntries(Object.entries(S.orders).filter(e=>bk(e[1])==id))})}}
+ catch(e){ids.forEach(i=>dirty.add(i));msg='Could not save to your account ('+(e&&e.code||'error')+'). Your data is still on this device.';render()}}
+function preset(p){const n=new Date(),t=iso(n);let f=t;if(p=='7')f=iso(new Date(n-6*864e5));if(p=='30')f=iso(new Date(n-29*864e5));if(p=='fy')f=(n.getMonth()>2?n.getFullYear():n.getFullYear()-1)+'-04-01';S.from=f;S.to=t;S.p=p}
+function bar(){return '<div class="bar">'+[['1','Today'],['7','7 days'],['30','30 days'],['fy','This FY']].map(a=>`<button data-a="pre" data-v="${a[0]}" class="${S.p==a[0]?'on':''}">${a[1]}</button>`).join('')+`<input type="date" id="df" value="${S.from}" data-a="rng"><input type="date" id="dt" value="${S.to}" data-a="rng"></div>`}
+function csv(t){const R=[];let r=[],c='',q=false;
+ for(let i=0;i<t.length;i++){const h=t[i];
+  if(q){if(h=='"'){if(t[i+1]=='"'){c+='"';i++}else q=false}else c+=h}
+  else if(h=='"')q=true;else if(h==','){r.push(c);c=''}
+  else if(h=='\n'||h=='\r'){if(h=='\r'&&t[i+1]=='\n')i++;r.push(c);c='';if(r.some(x=>x.trim()))R.push(r);r=[]}
+  else c+=h}
+ r.push(c);if(r.some(x=>x.trim()))R.push(r);return R}
+const AL={oid:['order item id','orderitemid'],ord:['order id','orderid'],dt:['order date','ordered on','order placed date'],sku:['sku','seller sku','sku id'],q:['quantity','qty'],st:['order item status','item status','order status','status'],amt:['selling price','final invoice amount','invoice amount','order value','sale amount']};
+function analyse(rows,name){
+ const nm=s=>String(s).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();let hi=-1,map={},best=0;
+ for(let i=0;i<Math.min(rows.length,15);i++){const m={};rows[i].forEach((h,j)=>{for(const k in AL)if(m[k]==null&&AL[k].some(a=>nm(a)==nm(h)))m[k]=j});
+  const n=Object.keys(m).length;if(m.oid!=null&&m.dt!=null&&n>best){best=n;hi=i;map=m}}
+ if(hi<0)return{name,err:'Could not find both "Order Item ID" and "Order Date" columns in the first 15 rows, so nothing was imported. Check that this is an order report saved as CSV.'};
+ const add=[],upd=[],errs=[],seen=new Set();let dup=0;
+ rows.slice(hi+1).forEach((r,i)=>{const l=hi+i+2,g=k=>map[k]==null?'':String(r[map[k]]==null?'':r[map[k]]).trim();
+  const oid=g('oid'),d=pd(g('dt'));
+  if(!oid){errs.push({l,m:'Order Item ID is empty'});return}
+  if(!d){errs.push({l,m:'Order date "'+g('dt')+'" is not readable'});return}
+  const qn=g('q')?Number(g('q')):1;if(!Number.isInteger(qn)||qn<1){errs.push({l,m:'Quantity "'+g('q')+'" is not valid'});return}
+  let amt=null;if(g('amt')){amt=toP(g('amt'));if(amt==null){errs.push({l,m:'Amount "'+g('amt')+'" is not readable'});return}}
+  const s=g('st').toLowerCase(),status=s.includes('cancel')?'CANCELLED':(s.includes('return')||/\brto\b/.test(s))?'RETURNED':s.includes('deliver')?'DELIVERED':'OPEN';
+  const key='FLIPKART:'+oid;if(seen.has(key)){dup++;return}seen.add(key);
+  const row={key,platform:'FLIPKART',oid,orderId:g('ord'),orderDate:d,sku:g('sku'),qty:qn,amt,status};
+  const old=S.orders[key];if(!old)add.push(row);else if(old.status!=status)upd.push({key,from:old.status,to:status});else dup++});
+ return{name,add,upd,dup,errs}}
+function apply(){const P=pend;if(!P||P.err)return;const ids=new Set();
+ P.add.forEach(r=>{S.orders[r.key]=r;ids.add(bk(r))});
+ P.upd.forEach(u=>{const o=S.orders[u.key];S.orders[u.key]=Object.assign({},o,{status:u.to});ids.add(bk(o));log('Order status changed',u.key+' '+u.from+' to '+u.to)});
+ S.imports.unshift({t:new Date().toISOString(),name:P.name,add:P.add.length,upd:P.upd.length,dup:P.dup,err:P.errs.length});S.imports.length=Math.min(S.imports.length,50);
+ log('Import',P.name+': '+P.add.length+' new, '+P.upd.length+' updated, '+P.dup+' duplicates skipped');
+ pend=null;save([...ids])}
+function readFile(f){if(!f)return;const r=new FileReader();
+ r.onload=()=>{pend=analyse(csv(String(r.result).replace(/^\uFEFF/,'')),f.name);render()};
+ r.onerror=()=>{pend={err:'Could not read the file.'};render()};r.readAsText(f)}
+
+function vHome(){
+ const all=Object.values(S.orders);
+ if(!all.length)return bar()+'<div class="card"><b>No orders yet.</b><p class="note">Import a Flipkart order report to see sales, cancellations and profit here. Nothing is shown until real data is loaded.</p><button class="btn p" data-a="tab" data-v="imp">Go to Import</button></div>';
+ const os=all.filter(o=>inR(o.orderDate)),ex=S.expenses.filter(e=>!e.del&&inR(e.date));
+ let sales=0,cst=0,noCost=0,noAmt=0,n=0,c=0,r=0;
+ os.forEach(o=>{if(o.status=='CANCELLED')c++;else if(o.status=='RETURNED')r++;else{n++;if(o.amt==null)noAmt++;else sales+=o.amt;const k=costOf(o.sku);if(k==null)noCost++;else cst+=k*o.qty}});
+ const exp=ex.reduce((a,e)=>a+e.amt,0),inc=noCost||noAmt;
+ const kp=(l,v)=>`<div class="card"><div class="k">${l}</div><div class="v">${v}</div></div>`;
+ return bar()+(os.length?'':'<div class="note">No orders in this period. Change the dates above.</div>')+
+ `<div class="g">${kp('Orders (by order date)',os.length)}${kp('Sold (not cancelled or returned)',n)}${kp('Cancelled',c)}${kp('Returned',r)}</div>
+ <h2>Money for this period</h2><div class="card">
+ <div class="row"><span>Sales</span><b>${noAmt&&!sales?NA:rs(sales)}</b></div>
+ <div class="row"><span>Product cost</span><b>${noCost&&!cst?NA:rs(cst)}</b></div>
+ <div class="row"><span>Expenses</span><b>${rs(exp)}</b></div>
+ <div class="row"><span>Marketplace fees and settlements</span><span class="na">Not imported</span></div>
+ <div class="row"><span>Estimated profit</span><b>${rs(sales-cst-exp)}</b></div>
+ ${inc?`<div class="na">Profit calculation incomplete: ${noCost} sold item(s) have no product cost${noAmt?', '+noAmt+' have no amount':''}. Add costs in Stock.</div>`:''}
+ <div class="note">Excludes marketplace fees, shipping and GST until settlements are imported.</div></div>`}
+function vOrders(){
+ const q=S.q.toLowerCase(),os=Object.values(S.orders).filter(o=>inR(o.orderDate)&&(!S.st||o.status==S.st)&&(!q||(o.orderId+' '+o.sku+' '+o.oid).toLowerCase().includes(q))).sort((a,b)=>a.orderDate<b.orderDate?1:a.orderDate>b.orderDate?-1:0);
+ return bar()+`<div class="bar"><input data-a="q" placeholder="Search order ID or SKU" value="${esc(S.q)}"><select data-a="st">${['','OPEN','DELIVERED','CANCELLED','RETURNED'].map(s=>`<option value="${s}" ${S.st==s?'selected':''}>${s||'All statuses'}</option>`).join('')}</select></div>`+
+ (os.length?`<div class="note">Showing ${Math.min(os.length,100)} of ${os.length} orders, by order date</div><div class="card sc"><table><tr><th>Order date</th><th>Order ID</th><th>SKU</th><th>Qty</th><th>Amount</th><th>Status</th></tr>${os.slice(0,100).map(o=>`<tr><td>${o.orderDate}</td><td>${esc(o.orderId||o.oid)}</td><td>${esc(o.sku)||NA}</td><td>${o.qty}</td><td>${m$(o.amt)}</td><td><span class="b ${sold(o)?'':'bad'}">${o.status}</span></td></tr>`).join('')}</table></div>`:'<div class="card note">No orders match. Change the dates or filters, or import a report.</div>')}
+function vStock(){
+ const skus=[...new Set(S.products.map(p=>p.sku).concat(Object.values(S.orders).map(o=>o.sku).filter(Boolean)))].sort();
+ const st=s=>S.moves.filter(m=>m.sku==s).reduce((a,m)=>a+m.qty,0)-Object.values(S.orders).filter(o=>o.sku==s&&sold(o)).reduce((a,o)=>a+o.qty,0);
+ return `<h1>Products and stock</h1><div class="card sc"><table><tr><th>SKU</th><th>Name</th><th>Unit cost</th><th>In stock</th></tr>${skus.map(s=>{const p=S.products.find(p=>p.sku==s),n=st(s);return `<tr><td>${esc(s)}</td><td>${esc(p&&p.name)}</td><td>${m$(p&&p.cost)}</td><td class="${n<0?'bad':''}">${n}${n<0?' (check)':''}</td></tr>`}).join('')||'<tr><td class="note">No products yet. Add one below or import orders.</td></tr>'}</table></div>
+ <div class="note">Stock = purchases and adjustments minus units sold. Cancelled and returned orders never reduce stock.</div>
+ <h2>Add or update product</h2><form class="card" data-f="prod"><label>SKU</label><input name="sku" list="sl" required><datalist id="sl">${skus.map(s=>`<option value="${esc(s)}">`).join('')}</datalist><label>Name</label><input name="name"><label>Unit cost (₹)</label><input name="cost" inputmode="decimal"><p><button class="btn p">Save product</button></p></form>
+ <h2>Stock in or adjust</h2><form class="card" data-f="move"><label>SKU</label><input name="sku" list="sl" required><label>Type</label><select name="type"><option value="PURCHASE">Purchase (adds stock)</option><option value="ADJUST">Adjustment (+ or -)</option></select><label>Quantity</label><input name="qty" inputmode="numeric" required><label>Note</label><input name="note"><p><button class="btn p">Save stock entry</button></p></form>`}
+function vMoney(){
+ const ex=S.expenses.filter(e=>!e.del&&inR(e.date)).sort((a,b)=>a.date<b.date?1:-1),tot=ex.reduce((a,e)=>a+e.amt,0);
+ return bar()+`<div class="card"><div class="k">Expenses in this period (by expense date)</div><div class="v">${rs(tot)}</div></div>`+
+ ex.map(e=>`<div class="card ex"><div><b>${esc(e.cat)}</b> <span class="note">${e.date}</span><div class="note">${esc(e.note)}</div></div><div>${rs(e.amt)}<br><button class="btn" data-a="delx" data-v="${e.id}">Remove</button></div></div>`).join('')+
+ `<h2>Add expense</h2><form class="card" data-f="exp"><label>Date</label><input type="date" name="date" value="${iso(new Date())}" required><label>Category</label><select name="cat">${['Packaging','Shipping','Rent','Salary','Ads','Software','Other'].map(c=>`<option>${c}</option>`).join('')}</select><label>Amount (₹)</label><input name="amt" inputmode="decimal" required><label>Note</label><input name="note"><p><button class="btn p">Save expense</button></p></form>`}
+function vImp(){const P=pend;
+ return `<h1>Import Flipkart orders</h1><div class="card"><p class="note">Upload an order report saved as .csv. Columns are matched by header name, never by position. Existing orders are never deleted and repeat uploads never create duplicates.</p><input type="file" accept=".csv,text/csv" data-a="file"></div>`+
+ (P?(P.err?`<div class="card bad">${esc(P.err)}</div>`:`<div class="card"><b>Preview: ${esc(P.name)}</b><div class="row"><span>New orders</span><b>${P.add.length}</b></div><div class="row"><span>Status changes on existing orders</span><b>${P.upd.length}</b></div><div class="row"><span>Duplicates skipped</span><b>${P.dup}</b></div><div class="row"><span>Rows with errors (not imported)</span><b class="${P.errs.length?'bad':''}">${P.errs.length}</b></div>${P.errs.slice(0,8).map(e=>`<div class="note bad">Line ${e.l}: ${esc(e.m)}</div>`).join('')}<p><button class="btn p" data-a="apply" ${P.add.length+P.upd.length?'':'disabled'}>Import ${P.add.length+P.upd.length} rows</button> <button class="btn" data-a="cancel">Cancel</button></p></div>`):'')+
+ '<h2>Import history</h2>'+(S.imports.length?S.imports.slice(0,10).map(i=>`<div class="card note">${i.t.slice(0,16).replace('T',' ')}, ${esc(i.name)}: ${i.add} new, ${i.upd} updated, ${i.dup} duplicates, ${i.err} errors</div>`).join(''):'<div class="card note">No imports yet.</div>')+
+ '<h2>Audit trail</h2>'+(S.audit.length?S.audit.slice(0,25).map(a=>`<div class="note">${a.t.slice(0,16).replace('T',' ')} ${esc(a.a)}: ${esc(a.d)}</div>`).join(''):'<div class="note">No changes recorded yet.</div>')}
+function render(){
+ $('#n').innerHTML=[['home','Home'],['orders','Orders'],['stock','Stock'],['money','Expenses'],['imp','Import']].map(a=>`<button data-a="tab" data-v="${a[0]}" class="${S.tab==a[0]?'on':''}">${a[1]}</button>`).join('');
+ const v={home:vHome,orders:vOrders,stock:vStock,money:vMoney,imp:vImp}[S.tab]();
+ $('#m').innerHTML=(local?'<div class="card note">Saved on this device only. Open this page while signed in to keep your data in your account.</div>':'')+(msg?`<div class="card bad">${esc(msg)}</div>`:'')+v}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b||b.tagName=='INPUT'||b.tagName=='SELECT')return;const a=b.dataset.a,v=b.dataset.v;msg='';
+ if(a=='tab')S.tab=v;else if(a=='pre')preset(v);else if(a=='apply')apply();else if(a=='cancel')pend=null;
+ else if(a=='delx'){const x=S.expenses.find(x=>x.id==v);if(x){x.del=true;log('Expense removed',x.cat+' '+rs(x.amt)+' on '+x.date);save()}}
+ render()});
+document.addEventListener('change',e=>{const t=e.target,a=t.dataset.a;if(!a)return;msg='';
+ if(a=='rng'){S.from=$('#df').value||S.from;S.to=$('#dt').value||S.to;S.p='c';if(S.from>S.to){const x=S.from;S.from=S.to;S.to=x}}
+ else if(a=='q')S.q=t.value;else if(a=='st')S.st=t.value;
+ else if(a=='file'){readFile(t.files[0]);return}
+ render()});
+document.addEventListener('submit',e=>{e.preventDefault();const f=e.target,d=Object.fromEntries(new FormData(f)),k=f.dataset.f;msg='';
+ if(k=='prod'){const sku=d.sku.trim(),c=d.cost.trim()?toP(d.cost):null;
+  if(!sku||(d.cost.trim()&&(c==null||c<0))){msg='Enter a SKU and a unit cost like 249.50.';return render()}
+  let p=S.products.find(p=>p.sku==sku);if(p){if(d.name.trim())p.name=d.name.trim();if(c!=null)p.cost=c}else S.products.push({sku,name:d.name.trim(),cost:c});
+  log('Product saved',sku+(c!=null?', cost '+rs(c):''));save()}
+ if(k=='move'){const sku=d.sku.trim(),q=Number(d.qty);
+  if(!sku||!Number.isInteger(q)||q==0||(d.type=='PURCHASE'&&q<0)){msg='Enter a SKU and a whole-number quantity. Purchases must be above zero.';return render()}
+  S.moves.push({id:uid8(),sku,type:d.type,qty:q,date:iso(new Date()),note:d.note.trim()});log('Stock '+d.type.toLowerCase(),sku+', quantity '+q);save()}
+ if(k=='exp'){const a=toP(d.amt);
+  if(a==null||a<=0||!pd(d.date)){msg='Enter a valid date and an amount above zero.';return render()}
+  S.expenses.push({id:uid8(),date:d.date,cat:d.cat,amt:a,note:d.note.trim()});log('Expense added',d.cat+' '+rs(a)+' on '+d.date);save()}
+ render()});
+async function boot(){
+ try{const l=JSON.parse(localStorage.getItem('sl1')||'null');if(l)['products','moves','expenses','imports','audit','orders'].forEach(k=>{if(l[k])S[k]=l[k]})}catch(e){}
+ preset('30');render();
+ try{DB=await claude.use('db');if(!DB)return;let id='me';
+  try{const u=await claude.use('user');if(u&&u.id)id=await u.id()}catch(e){}
+  BASE='data/users/'+id;const snap=await DB.collection(BASE).get();
+  if(snap.size){const o={};snap.docs.forEach(d=>{const x=JSON.parse(JSON.stringify(d.data()));
+   if(d.id=='meta')['products','moves','expenses','imports','audit'].forEach(k=>{if(x[k])S[k]=x[k]});else Object.assign(o,x.rows||{})});S.orders=o}
+  else{dirty.add('meta');Object.values(S.orders).forEach(r=>dirty.add(bk(r)));flush()}
+  local=false;render()}
+ catch(e){DB=null;msg='Could not reach your account storage ('+(e&&e.code||'error')+'). Working on this device only.';render()}}
+boot();
+</script>
+</body>
+</html>
